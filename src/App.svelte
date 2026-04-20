@@ -98,7 +98,7 @@
       markdown = d;
     } else {
       try {
-        const res = await fetch('/boilerplate.md');
+        const res = await fetch(`${import.meta.env.BASE_URL}boilerplate.md`);
         if (res.ok) {
           const text = await res.text();
           markdown = text;
