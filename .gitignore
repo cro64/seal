@@ -12,6 +12,22 @@ dist
 dist-ssr
 *.local
 
+# Local notes and research (not part of the shipped app)
+docs/
+
+# Secrets and local env
+.env
+.env.*
+!.env.example
+
+# Tooling / caches
+.cache
+.turbo
+.eslintcache
+*.tsbuildinfo
+coverage
+*.pem
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
