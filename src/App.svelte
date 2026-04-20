@@ -2,8 +2,7 @@
   import { onMount } from 'svelte';
   import { getPresetColors, PRESET_IDS, themeConfigToCss, getSavedThemes } from './lib/themes';
   import { parseMarkdown } from './lib/markdown.js';
-  import { copyHtmlToClipboard, getStyledHtmlDocument } from './lib/copyHtml.js';
-  import html2pdf from 'html2pdf.js';
+  import { copyHtmlToClipboard, getStyledHtmlDocument, getThemeBackground } from './lib/copyHtml.js';
   import { parseHash, buildHash, setHash, parseStyleParam } from './lib/hash.js';
   import { decryptPayload, encryptPayload } from './lib/encrypt.js';
   import { showFeedback } from './lib/feedback.js';
@@ -179,38 +178,54 @@
     downloadBlob(blob, `${base}.html`);
   }
 
-  async function handleDownloadPdf() {
+  function handleDownloadPdf() {
     downloadDropdownOpen = false;
     const base = getDownloadBasename(markdown);
-    const doc = getStyledHtmlDocument(htmlContent, themeCss, base);
-    const iframe = document.createElement('iframe');
-    iframe.style.cssText = 'position:fixed;left:-9999px;width:800px;height:600px;visibility:hidden;';
-    document.body.appendChild(iframe);
-    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-    if (!iframeDoc) {
-      document.body.removeChild(iframe);
-      return;
+
+    /* Use the browser's native print pipeline — same renderer as the preview,
+       no canvas rasterization, vector text, exact colors, correct line wrapping.
+       @page margin is 0; the body gets the theme's own background + padding so
+       the page margin area is the same colour as the content — no white border
+       on dark themes, no colour mismatch on any theme. */
+    const themeBg = getThemeBackground(themeCss);
+    const safeTitle = base.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const printHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>${safeTitle}</title>
+  <style>
+    @page { size: A4 portrait; margin: 0; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      background: ${themeBg};
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
-    iframeDoc.open();
-    iframeDoc.write(doc);
-    iframeDoc.close();
-    await new Promise((resolve) => {
-      if (iframe.contentWindow?.document.readyState === 'complete') resolve();
-      else iframe.onload = resolve;
+    body { padding: 14mm; }
+    ${themeCss}
+    .md-preview { padding: 0; }
+    pre, table, img, blockquote, figure { break-inside: avoid; page-break-inside: avoid; }
+    h1, h2, h3, h4 { break-after: avoid; page-break-after: avoid; }
+  </style>
+</head>
+<body>
+  <div class="md-preview">${htmlContent}</div>
+</body>
+</html>`;
+
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.open();
+    win.document.write(printHtml);
+    win.document.close();
+    win.addEventListener('load', () => {
+      setTimeout(() => {
+        win.focus();
+        win.print();
+        win.close();
+      }, 300);
     });
-    try {
-      await html2pdf()
-        .set({
-          filename: `${base}.pdf`,
-          margin: 10,
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2 },
-        })
-        .from(iframeDoc.body)
-        .save();
-    } finally {
-      document.body.removeChild(iframe);
-    }
   }
 
   async function handleShareStyle() {
