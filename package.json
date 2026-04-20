@@ -1,5 +1,6 @@
 {
   "name": "seal",
+  "description": "Seal — themed markdown editor with share and encryption.",
   "private": true,
   "version": "0.0.0",
   "type": "module",
