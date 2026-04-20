@@ -1,0 +1,109 @@
+@import 'tailwindcss';
+
+:root, [data-theme="dark"] {
+  --c-bg: #09090b;
+  --c-bg-surface: #18181b;
+  --c-bg-elevated: #27272a;
+  --c-bg-editor: #0c0c0e;
+  --c-bg-preview: #131316;
+  --c-text: #fafafa;
+  --c-text-secondary: #a1a1aa;
+  --c-text-muted: #71717a;
+  --c-text-dimmed: #52525b;
+  --c-text-input: #d4d4d8;
+  --c-border: #27272a;
+  --c-border-subtle: #1f1f23;
+  --c-border-hover: #3f3f46;
+  --c-accent: #2563eb;
+  --c-accent-hover: #1d4ed8;
+  --c-destructive: #ef4444;
+  --c-bg-glass: rgba(35,35,45,0.65);
+  --c-glass-border: rgba(255,255,255,0.08);
+  --c-glass-highlight: inset 0 0.5px 0 0 rgba(255,255,255,0.12);
+  --c-glass-shadow: 0 8px 32px rgba(0,0,0,0.35), 0 2px 8px rgba(0,0,0,0.2);
+  --c-backdrop: rgba(0,0,0,0.6);
+  --c-ring: rgba(255,255,255,0.05);
+  --c-shadow: rgba(0,0,0,0.3);
+  --c-shadow-deep: rgba(0,0,0,0.2);
+  --c-shadow-xs: 0 1px 2px rgba(0,0,0,0.2);
+  --c-shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+  --c-shadow-md: 0 4px 6px -1px rgba(0,0,0,0.3), 0 2px 4px -1px rgba(0,0,0,0.2);
+  --c-shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.3), 0 4px 6px -2px rgba(0,0,0,0.15);
+  --c-shadow-card: 0 0 0 1px rgba(255,255,255,0.06), 0 2px 4px rgba(0,0,0,0.2), 0 8px 20px rgba(0,0,0,0.2), 0 20px 48px rgba(0,0,0,0.15);
+  --c-selection: #2563eb40;
+  --c-caret: #3b82f6;
+  --c-focus-ring: #3b82f680;
+  --c-placeholder: #3f3f46;
+}
+
+[data-theme="light"] {
+  --c-bg: #ffffff;
+  --c-bg-glass: rgba(230,230,240,0.55);
+  --c-glass-border: rgba(255,255,255,0.5);
+  --c-glass-highlight: inset 0 0.5px 0 0 rgba(255,255,255,0.7);
+  --c-glass-shadow: 0 8px 32px rgba(0,0,0,0.1), 0 2px 8px rgba(0,0,0,0.06);
+  --c-bg-surface: #f4f4f5;
+  --c-bg-elevated: #ffffff;
+  --c-bg-editor: #fafafa;
+  --c-bg-preview: #f4f4f5;
+  --c-text: #09090b;
+  --c-text-secondary: #52525b;
+  --c-text-muted: #71717a;
+  --c-text-dimmed: #a1a1aa;
+  --c-text-input: #3f3f46;
+  --c-border: #e4e4e7;
+  --c-border-subtle: #f0f0f2;
+  --c-border-hover: #d4d4d8;
+  --c-accent: #2563eb;
+  --c-accent-hover: #1d4ed8;
+  --c-destructive: #ef4444;
+  --c-backdrop: rgba(0,0,0,0.3);
+  --c-ring: rgba(0,0,0,0.06);
+  --c-shadow: rgba(0,0,0,0.08);
+  --c-shadow-deep: rgba(0,0,0,0.05);
+  --c-shadow-xs: 0 1px 2px rgba(0,0,0,0.05);
+  --c-shadow-sm: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+  --c-shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+  --c-shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+  --c-shadow-card: 0 0 0 1px rgba(0,0,0,0.05), 0 2px 4px rgba(0,0,0,0.04), 0 8px 20px rgba(0,0,0,0.06), 0 20px 48px rgba(0,0,0,0.04);
+  --c-selection: #2563eb20;
+  --c-caret: #2563eb;
+  --c-focus-ring: #2563eb40;
+  --c-placeholder: #a1a1aa;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+*,
+*::before,
+*::after {
+  transition:
+    background-color 1s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 1s cubic-bezier(0.22, 1, 0.36, 1),
+    color 1s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 1s cubic-bezier(0.22, 1, 0.36, 1),
+    fill 1s cubic-bezier(0.22, 1, 0.36, 1),
+    stroke 1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.md-preview ul { list-style: disc; }
+.md-preview ol { list-style: decimal; }
+.md-preview ul ul { list-style: circle; }
+.md-preview ul ul ul { list-style: square; }
+.md-preview li { display: list-item; }
