@@ -184,9 +184,17 @@
 
     /* Use the browser's native print pipeline — same renderer as the preview,
        no canvas rasterization, vector text, exact colors, correct line wrapping.
-       @page margin is 0; the body gets the theme's own background + padding so
-       the page margin area is the same colour as the content — no white border
-       on dark themes, no colour mismatch on any theme. */
+
+       Each printed page is a fixed-height .page div (297mm × 210mm, padding 14mm)
+       so every page is its own padded viewport. @page margin stays 0 — no white
+       border strips. Page breaks fall between .page containers, never through them.
+
+       The inline script runs on load:
+         1. Pins document to A4 content width (182mm) for accurate measurement.
+         2. Measures each .md-preview child's rendered height.
+         3. Greedily packs children into .page divs; headings are bumped to the
+            next page if they would be the last item (orphan prevention).
+         4. Replaces the original .md-preview with the paged output, then prints. */
     const themeBg = getThemeBackground(themeCss);
     const safeTitle = base.replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const printHtml = `<!DOCTYPE html>
@@ -202,15 +210,139 @@
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
-    body { padding: 14mm; }
+    body { margin: 0; padding: 0; }
+    .page {
+      width: 210mm;
+      height: 297mm;
+      padding: 14mm;
+      overflow: hidden;
+      background: ${themeBg};
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      break-after: page;
+      page-break-after: always;
+    }
+    .page:last-child {
+      break-after: avoid;
+      page-break-after: avoid;
+    }
     ${themeCss}
     .md-preview { padding: 0; }
-    pre, table, img, blockquote, figure { break-inside: avoid; page-break-inside: avoid; }
-    h1, h2, h3, h4 { break-after: avoid; page-break-after: avoid; }
   </style>
 </head>
 <body>
   <div class="md-preview">${htmlContent}</div>
+  <script>
+    window.addEventListener('load', function () {
+      var PX        = 96 / 25.4;
+      var PAGE_W    = Math.round(210 * PX);   // ~794 px
+      var CONTENT_H = Math.floor((297 - 28) * PX); // 1016 px (297 - 2×14, floor = conservative)
+
+      var preview = document.querySelector('.md-preview');
+      if (!preview) { window.focus(); window.print(); window.close(); return; }
+
+      // Pin to A4 width so text wraps as it will in print
+      document.documentElement.style.width = PAGE_W + 'px';
+
+      var kids = Array.from(preview.children);
+
+      // Measure heights using rect.top diffs — this naturally captures collapsed
+      // margins between adjacent siblings, giving the true visual height of each
+      // element including the gap it creates before the next one.
+      var rects = kids.map(function (el) { return el.getBoundingClientRect(); });
+      var heights = kids.map(function (el, i) {
+        if (i < kids.length - 1) {
+          // Distance from this element's top to the next element's top
+          return rects[i + 1].top - rects[i].top;
+        }
+        // Last element: its own height + its bottom margin
+        var mb = parseFloat(window.getComputedStyle(el).marginBottom) || 0;
+        return rects[i].height + mb;
+      });
+
+      // marginTops[i] = the element's own (uncollapsed) marginTop.
+      // Used to restore spacing for the first element on pages 2+, because the
+      // theme CSS rule ".md-preview > *:first-child { margin-top: 0 !important }"
+      // zeroes that margin whenever an element lands first in a new .md-preview.
+      var marginTops = kids.map(function (el) {
+        return parseFloat(window.getComputedStyle(el).marginTop) || 0;
+      });
+
+      // Greedy page-packing
+      var pages      = [[]];  // array of arrays of child elements
+      var filled     = [0];   // consumed height per page (px)
+      var topSpacers = [0];   // spacer height to prepend on each page
+      var HEADING    = /^H[1-4]$/;
+
+      for (var i = 0; i < kids.length; i++) {
+        var el = kids[i];
+        var h  = heights[i];
+        var p  = pages.length - 1;
+
+        // Element alone is taller than one content area → own page, no spacer
+        if (h > CONTENT_H) {
+          if (filled[p] > 0) { pages.push([]); filled.push(0); topSpacers.push(0); p++; }
+          pages[p].push(el);
+          pages.push([]); filled.push(0); topSpacers.push(0);
+          continue;
+        }
+
+        // Doesn't fit on current page → start a new page
+        if (filled[p] + h > CONTENT_H) {
+          pages.push([]); filled.push(0); p++;
+          // Reserve space for the top spacer we'll insert to restore this
+          // element's margin-top (which :first-child will otherwise zero out)
+          var spc = marginTops[i];
+          topSpacers.push(spc);
+          filled[p] += spc;
+        }
+
+        pages[p].push(el);
+        filled[p] += h;
+
+        // Orphan prevention: heading as last item on page → bump to next page
+        if (HEADING.test(el.tagName) && i < kids.length - 1) {
+          var remaining = CONTENT_H - filled[p];
+          var nextH     = heights[i + 1] || 0;
+          if (remaining < nextH) {
+            pages.push([]); filled.push(0); topSpacers.push(0);
+          }
+        }
+      }
+
+      // Build .page divs and populate them
+      var body = document.body;
+      body.removeChild(preview);
+
+      pages.forEach(function (children, pageIdx) {
+        if (children.length === 0) return;
+        var pageDiv = document.createElement('div');
+        pageDiv.className = 'page';
+        var inner = document.createElement('div');
+        inner.className = 'md-preview';
+
+        // On pages 2+, insert a spacer before the first real element so that
+        // the element's natural margin-top is visible despite the theme's
+        // ":first-child { margin-top: 0 !important }" rule. The spacer becomes
+        // :first-child (harmless) and the element remains :nth-child(2).
+        var spcH = topSpacers[pageIdx] || 0;
+        if (pageIdx > 0 && spcH > 0) {
+          var spc = document.createElement('div');
+          spc.setAttribute('aria-hidden', 'true');
+          spc.style.cssText = 'height:' + spcH + 'px;margin:0;padding:0;';
+          inner.appendChild(spc);
+        }
+
+        children.forEach(function (child) { inner.appendChild(child); });
+        pageDiv.appendChild(inner);
+        body.appendChild(pageDiv);
+      });
+
+      window.focus();
+      window.print();
+      window.close();
+    });
+  <\/script>
 </body>
 </html>`;
 
@@ -219,12 +351,9 @@
     win.document.open();
     win.document.write(printHtml);
     win.document.close();
+    // Fallback: if the embedded script somehow fails, print after 4 s
     win.addEventListener('load', () => {
-      setTimeout(() => {
-        win.focus();
-        win.print();
-        win.close();
-      }, 300);
+      setTimeout(() => { if (!win.closed) { win.focus(); win.print(); win.close(); } }, 4000);
     });
   }
 
