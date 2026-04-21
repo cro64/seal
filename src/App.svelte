@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { getPresetColors, PRESET_IDS, themeConfigToCss, getSavedThemes } from './lib/themes';
+  import { getPresetColors, PRESET_IDS, themeConfigToCss, getSavedThemes, loadPreset } from './lib/themes';
   import { parseMarkdown } from './lib/markdown.js';
   import { copyHtmlToClipboard, getStyledHtmlDocument, getThemeBackground } from './lib/copyHtml.js';
   import { parseHash, buildHash, setHash, parseStyleParam } from './lib/hash.js';
@@ -15,7 +15,14 @@
   let mode = $state('edit');
   let markdown = $state('');
   let themeConfig = $state({ preset: 'github', overrides: {} });
-  let themeCss = $derived(themeConfigToCss(themeConfig));
+  let themeCss = $state('');
+  $effect(() => {
+    const config = themeConfig;
+    const id = config?.preset || 'github';
+    loadPreset(id).then(() => {
+      themeCss = themeConfigToCss(config);
+    });
+  });
   let copyFeedback = $state('');
   let copyDropdownOpen = $state(false);
   let shareDropdownOpen = $state(false);

@@ -74,16 +74,20 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
-*,
-*::before,
-*::after {
+:root,
+body,
+.shell,
+.pane-editor,
+.pane-preview,
+.editor-wrap,
+.card,
+.fullpreview,
+[data-toolbar-dropdown] {
   transition:
-    background-color 1s cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 1s cubic-bezier(0.22, 1, 0.36, 1),
-    color 1s cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 1s cubic-bezier(0.22, 1, 0.36, 1),
-    fill 1s cubic-bezier(0.22, 1, 0.36, 1),
-    stroke 1s cubic-bezier(0.22, 1, 0.36, 1);
+    background-color 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    color 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 body {

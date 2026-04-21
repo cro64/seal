@@ -4,74 +4,11 @@
  * with the ciphertext. Payload is gzip-compressed before encryption to shorten the URL.
  */
 
+import { gzipCompressToBytes, gzipDecompressToStr, bytesToBase64 } from './gzip.js';
+
 const SALT_LEN = 16;
 const IV_LEN = 12;
 const PBKDF2_ITERATIONS = 100000;
-
-/**
- * Gzip-compress a string to bytes (CompressionStream).
- * @param {string} str
- * @returns {Promise<Uint8Array>}
- */
-async function gzipCompressToBytes(str) {
-  const enc = new TextEncoder();
-  const data = enc.encode(str);
-  const stream = new Blob([data]).stream().pipeThrough(new CompressionStream('gzip'));
-  const chunks = [];
-  const reader = stream.getReader();
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-  }
-  const totalLen = chunks.reduce((a, c) => a + c.length, 0);
-  const out = new Uint8Array(totalLen);
-  let offset = 0;
-  for (const c of chunks) {
-    out.set(c, offset);
-    offset += c.length;
-  }
-  return out;
-}
-
-/**
- * Gzip-decompress bytes to string (DecompressionStream).
- * @param {Uint8Array} bytes
- * @returns {Promise<string>}
- */
-async function gzipDecompressToStr(bytes) {
-  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
-  const chunks = [];
-  const reader = stream.getReader();
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-  }
-  const totalLen = chunks.reduce((a, c) => a + c.length, 0);
-  const out = new Uint8Array(totalLen);
-  let offset = 0;
-  for (const c of chunks) {
-    out.set(c, offset);
-    offset += c.length;
-  }
-  return new TextDecoder().decode(out);
-}
-
-/**
- * Encode bytes to base64 in chunks to avoid call-stack overflow.
- * @param {Uint8Array} bytes
- * @returns {string}
- */
-function bytesToBase64(bytes) {
-  const chunkSize = 8192;
-  let binary = '';
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
-    binary += String.fromCharCode.apply(null, chunk);
-  }
-  return btoa(binary);
-}
 
 /**
  * Derive an AES-GCM key from password and salt.

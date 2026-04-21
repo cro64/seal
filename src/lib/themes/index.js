@@ -1,54 +1,65 @@
 import * as legacy from '../themeConfig.js';
 import github from './github.js';
-import medium from './medium.js';
-import academic from './academic.js';
-import dark from './dark.js';
-import newsletter from './newsletter.js';
-import plain from './plain.js';
-import notion from './notion.js';
-import designdoc from './designdoc.js';
-import writer from './writer.js';
-import catppuccin from './catppuccin.js';
-import dracula from './dracula.js';
-import nord from './nord.js';
-import rosepine from './rosepine.js';
-import everforest from './everforest.js';
-import tokyonight from './tokyonight.js';
-import solarized from './solarized.js';
 
-const presets = {
-  github,
-  medium,
-  academic,
-  dark,
-  newsletter,
-  plain,
-  notion,
-  designdoc,
-  writer,
-  catppuccin,
-  dracula,
-  nord,
-  rosepine,
-  everforest,
-  tokyonight,
-  solarized,
+const presetLoaders = {
+  medium:      () => import('./medium.js'),
+  academic:    () => import('./academic.js'),
+  dark:        () => import('./dark.js'),
+  newsletter:  () => import('./newsletter.js'),
+  plain:       () => import('./plain.js'),
+  notion:      () => import('./notion.js'),
+  designdoc:   () => import('./designdoc.js'),
+  writer:      () => import('./writer.js'),
+  catppuccin:  () => import('./catppuccin.js'),
+  dracula:     () => import('./dracula.js'),
+  nord:        () => import('./nord.js'),
+  rosepine:    () => import('./rosepine.js'),
+  everforest:  () => import('./everforest.js'),
+  tokyonight:  () => import('./tokyonight.js'),
+  solarized:   () => import('./solarized.js'),
 };
 
-export const PRESET_IDS = Object.keys(presets);
+const presetLabels = {
+  github:     'GitHub',
+  medium:     'Medium',
+  academic:   'Academic',
+  dark:       'Dark',
+  newsletter: 'Newsletter',
+  plain:      'Plain',
+  notion:     'Notion',
+  designdoc:  'Design Doc',
+  writer:     'Writer',
+  catppuccin: 'Catppuccin',
+  dracula:    'Dracula',
+  nord:       'Nord',
+  rosepine:   'Rosé Pine',
+  everforest: 'Everforest',
+  tokyonight: 'Tokyo Night',
+  solarized:  'Solarized',
+};
 
-const defaultPreset = presets.github;
+const presetCache = { github };
+
+export const PRESET_IDS = ['github', ...Object.keys(presetLoaders)];
+
+export async function loadPreset(id) {
+  if (presetCache[id]) return presetCache[id];
+  if (!presetLoaders[id]) return github;
+  const mod = await presetLoaders[id]();
+  presetCache[id] = mod.default;
+  return presetCache[id];
+}
 
 export function getPresetCss(id) {
-  return presets[id]?.css ?? defaultPreset.css;
+  return presetCache[id]?.css ?? github.css;
 }
 
 export function getPresetLabel(id) {
-  return presets[id]?.label ?? id;
+  return presetLabels[id] ?? id;
 }
 
 export function getPresetColors(id) {
-  return presets[id]?.colors ?? defaultPreset.colors;
+  return presetCache[id]?.colors ?? github.colors;
 }
 
 export function themeConfigToCss(config) {

@@ -1,74 +1,4 @@
-/**
- * Compress string with gzip (CompressionStream), encode as base64url (URL-safe).
- * Used for style and document params in the hash.
- */
-async function gzipCompress(str) {
-  const enc = new TextEncoder();
-  const data = enc.encode(str);
-  const stream = new Blob([data]).stream().pipeThrough(new CompressionStream('gzip'));
-  const chunks = [];
-  const reader = stream.getReader();
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-  }
-  const totalLen = chunks.reduce((a, c) => a + c.length, 0);
-  const out = new Uint8Array(totalLen);
-  let offset = 0;
-  for (const c of chunks) {
-    out.set(c, offset);
-    offset += c.length;
-  }
-  const base64 = bytesToBase64(out);
-  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-/**
- * Decode base64url to bytes (for gzip decompress).
- */
-function base64urlToBytes(base64url) {
-  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
-  const pad = base64.length % 4;
-  const padded = pad ? base64 + '='.repeat(4 - pad) : base64;
-  const binary = atob(padded);
-  return Uint8Array.from(binary, (c) => c.charCodeAt(0));
-}
-
-/**
- * Uint8Array to base64 (chunked to avoid call stack overflow on large data).
- */
-function bytesToBase64(bytes) {
-  const chunkSize = 8192;
-  let binary = '';
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
-    binary += String.fromCharCode.apply(null, chunk);
-  }
-  return btoa(binary);
-}
-
-/**
- * Decompress gzip bytes to string. Throws if not valid gzip.
- */
-async function gzipDecompress(bytes) {
-  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
-  const chunks = [];
-  const reader = stream.getReader();
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-  }
-  const totalLen = chunks.reduce((a, c) => a + c.length, 0);
-  const out = new Uint8Array(totalLen);
-  let offset = 0;
-  for (const c of chunks) {
-    out.set(c, offset);
-    offset += c.length;
-  }
-  return new TextDecoder().decode(out);
-}
+import { gzipCompressToBase64url, gzipDecompressToStr, base64urlToBytes, isGzip } from './gzip.js';
 
 /** True if the value looks like base64url (gzip payload). */
 function looksLikeBase64url(str) {
@@ -80,7 +10,7 @@ function looksLikeBase64url(str) {
  */
 async function encodeParam(str) {
   if (!str) return '';
-  const compressed = await gzipCompress(str);
+  const compressed = await gzipCompressToBase64url(str);
   return encodeURIComponent(compressed);
 }
 
@@ -93,8 +23,8 @@ async function decodeParam(str) {
     const decoded = decodeURIComponent(str);
     if (!looksLikeBase64url(decoded)) return decoded;
     const bytes = base64urlToBytes(decoded);
-    if (bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b) {
-      return await gzipDecompress(bytes);
+    if (isGzip(bytes)) {
+      return await gzipDecompressToStr(bytes);
     }
     return decoded;
   } catch {
@@ -112,6 +42,8 @@ export async function parseHash(hash) {
   if (!hash || hash.charAt(0) !== '#') return out;
   const rest = hash.slice(1);
   const parts = rest.split('&');
+
+  const pending = [];
   for (const part of parts) {
     const [key, value] = part.split('=');
     if (key && value !== undefined) {
@@ -121,14 +53,20 @@ export async function parseHash(hash) {
         } catch {
           out.e = value;
         }
-      } else {
-        const v = await decodeParam(value);
-        if (key === 's') out.s = v;
-        else if (key === 'd') out.d = v;
-        else if (key === 'm') out.m = v;
+      } else if (key === 's' || key === 'd' || key === 'm') {
+        pending.push({ key, value });
       }
     }
   }
+
+  const decoded = await Promise.all(pending.map(({ value }) => decodeParam(value)));
+  for (let i = 0; i < pending.length; i++) {
+    const { key } = pending[i];
+    if (key === 's') out.s = decoded[i];
+    else if (key === 'd') out.d = decoded[i];
+    else if (key === 'm') out.m = decoded[i];
+  }
+
   return out;
 }
 
