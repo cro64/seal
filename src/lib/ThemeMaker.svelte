@@ -2,7 +2,7 @@
   import { getPresetColors, getEffectiveStyleValue, COLOR_FIELDS, DESIGN_SWATCHES, saveTheme } from './themes';
   import { toHex, parseHex } from './color.js';
 
-  let { config, savedThemes = {}, visible = true, onClose, onSaveName, onConfigChange } = $props();
+  let { config, savedThemes = {}, embedded = true, onPopOut, onClose, onSaveName, onConfigChange } = $props();
 
   let fontFamily = $state('');
   let fontSize = $state('');
@@ -124,19 +124,22 @@
   }
 
   function handleClickOutside(e) {
-    if (openPopover && !e.target.closest('.ft-color-wrap')) {
-      openPopover = null;
-      customPickerField = null;
-    }
-    if (fontPopoverOpen && !e.target.closest('.ft-font-wrap')) {
-      fontPopoverOpen = false;
-    }
-    if (stylePopoverOpen && !e.target.closest('.ft-style-wrap')) {
-      stylePopoverOpen = false;
-    }
-    if (customCssOpen && !e.target.closest('.ft-customcss-wrap')) {
-      customCssOpen = false;
-    }
+    const target = e.target;
+    queueMicrotask(() => {
+      if (openPopover && !target.closest('.ft-color-wrap')) {
+        openPopover = null;
+        customPickerField = null;
+      }
+      if (fontPopoverOpen && !target.closest('.ft-font-wrap')) {
+        fontPopoverOpen = false;
+      }
+      if (stylePopoverOpen && !target.closest('.ft-style-wrap')) {
+        stylePopoverOpen = false;
+      }
+      if (customCssOpen && !target.closest('.ft-customcss-wrap')) {
+        customCssOpen = false;
+      }
+    });
   }
 
   function openCustomPicker(key) {
@@ -294,12 +297,21 @@
     if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
     clearDragStart();
     e.preventDefault();
+
+    if (embedded) {
+      const rect = barEl.getBoundingClientRect();
+      onPopOut?.();
+      dragPos = { left: rect.left, top: rect.top };
+    }
+
     barEl.setPointerCapture(e.pointerId);
     dragging = true;
-    dragPos = {
-      left: Math.max(0, Math.min(e.clientX - 24, window.innerWidth - 48)),
-      top: Math.max(0, Math.min(e.clientY - 24, window.innerHeight - 48)),
-    };
+    if (!dragPos) {
+      dragPos = {
+        left: Math.max(0, Math.min(e.clientX - 24, window.innerWidth - 48)),
+        top: Math.max(0, Math.min(e.clientY - 24, window.innerHeight - 48)),
+      };
+    }
   }
 
   function onWindowPointerUp(e) {
@@ -311,6 +323,7 @@
     if (expanding) return;
     if (!e.target.closest('.ft-bar')) return;
     if (e.target.closest('.ft-font-popover, .ft-popover')) return;
+    if (embedded && !e.target.closest('.ft-drag-handle')) return;
     dragStart = { x: e.clientX, y: e.clientY, pointerId: e.pointerId };
     if (!windowListenersBound) {
       window.addEventListener('pointermove', onWindowPointerMove, { capture: true });
@@ -368,6 +381,15 @@
     });
     dragging = false;
   }
+
+  $effect(() => {
+    if (embedded) {
+      dragPos = null;
+      orientation = 'horizontal';
+      snapSide = 'none';
+      dragging = false;
+    }
+  });
 </script>
 
 <svelte:window onclick={handleClickOutside} />
@@ -376,20 +398,27 @@
   class="ft-bar"
   class:is-dragging={dragging}
   class:is-expanding={expanding}
-  class:has-custom-pos={dragPos !== null}
-  class:is-vertical={orientation === 'vertical'}
-  class:snap-left={snapSide === 'left'}
-  class:snap-right={snapSide === 'right'}
-  class:is-hidden={!visible}
+  class:has-custom-pos={!embedded && dragPos !== null}
+  class:is-vertical={!embedded && orientation === 'vertical'}
+  class:snap-left={!embedded && snapSide === 'left'}
+  class:snap-right={!embedded && snapSide === 'right'}
+  class:is-embedded={embedded}
+  class:is-floating={!embedded}
   role="toolbar"
   aria-label="Theme toolbar"
   tabindex="0"
-  style={dragPos ? `left:${dragPos.left}px;top:${dragPos.top}px;` : ''}
+  style={!embedded && dragPos ? `left:${dragPos.left}px;top:${dragPos.top}px;` : ''}
   bind:this={barEl}
   onpointerdown={onPointerDown}
   onpointermove={onPointerMove}
   onpointerup={onPointerUp}
 >
+  {#if embedded}
+    <button class="ft-drag-handle" type="button" title="Drag to pop out" aria-label="Drag to pop out">
+      <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2.5" cy="2.5" r="1.25"/><circle cx="7.5" cy="2.5" r="1.25"/><circle cx="2.5" cy="7" r="1.25"/><circle cx="7.5" cy="7" r="1.25"/><circle cx="2.5" cy="11.5" r="1.25"/><circle cx="7.5" cy="11.5" r="1.25"/></svg>
+    </button>
+    <div class="ft-sep"></div>
+  {/if}
   <!-- Type: icon + popover (same in horizontal and vertical) -->
   <div class="ft-font-wrap">
     <button
@@ -553,7 +582,7 @@
                 class="ft-swatch"
                 style="background:{color}"
                 title={color}
-                onclick={() => pickSwatchColor(field.key, color)}
+                onclick={(e) => { e.stopPropagation(); pickSwatchColor(field.key, color); }}
               ></button>
             {/each}
             <button
@@ -658,12 +687,8 @@
 {/if}
 
 <style>
-  /* ─── Floating bar ─── */
+  /* ─── Theme bar ─── */
   .ft-bar {
-    position: fixed;
-    bottom: 40px;
-    left: 50%;
-    transform: translateX(-50%);
     z-index: 30;
     display: flex;
     align-items: center;
@@ -672,7 +697,6 @@
     padding: 0 10px;
     background: var(--c-bg-glass);
     border: 1px solid var(--c-glass-border);
-    border-radius: 9999px;
     box-shadow: var(--c-glass-shadow), var(--c-glass-highlight);
     -webkit-backdrop-filter: blur(24px) saturate(1.6);
     backdrop-filter: blur(24px) saturate(1.6);
@@ -682,9 +706,40 @@
     white-space: nowrap;
     touch-action: none;
     opacity: 1;
+    transition: opacity 0.3s ease, transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* Embedded: spans toolbar width */
+  .ft-bar.is-embedded {
+    position: relative;
+    width: 100%;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    border-bottom: 1px solid var(--c-border-subtle);
+    box-shadow: none;
+    background: var(--c-bg);
+    justify-content: center;
+    padding: 0 16px;
+    overflow: visible;
+    animation: ft-expand 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  @keyframes ft-expand {
+    from { opacity: 0; max-height: 0; transform: translateY(-6px); }
+    to { opacity: 1; max-height: 48px; transform: translateY(0); }
+  }
+
+  /* Floating: draggable pill */
+  .ft-bar.is-floating {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 9999px;
     transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
   }
-  .ft-bar.has-custom-pos {
+  .ft-bar.is-floating.has-custom-pos {
     bottom: auto;
     left: auto;
     transform: none;
@@ -723,18 +778,34 @@
     transform: scale(1);
     transition: opacity 0.35s ease 0.12s, transform 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.12s;
   }
-  .ft-bar.is-hidden {
-    opacity: 0;
-    pointer-events: none;
-    transform: translateX(-50%) scale(0.92);
-    transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Drag handle (embedded only) */
+  .ft-drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--c-text-dimmed);
+    cursor: grab;
+    padding: 0;
+    flex-shrink: 0;
+    transition: background-color 0.15s, color 0.15s;
   }
-  .ft-bar.has-custom-pos.is-hidden {
-    transform: scale(0.92);
+  .ft-drag-handle:hover {
+    background: var(--c-bg-surface);
+    color: var(--c-text-secondary);
   }
+  .ft-bar.is-dragging .ft-drag-handle {
+    cursor: grabbing;
+  }
+
   @media (min-width: 769px) {
-    .ft-bar { cursor: grab; }
-    .ft-bar.is-dragging { cursor: grabbing; }
+    .ft-bar.is-floating { cursor: grab; }
+    .ft-bar.is-floating.is-dragging { cursor: grabbing; }
   }
 
   /* ─── Vertical orientation ─── */
@@ -781,11 +852,16 @@
     flex-direction: column;
     gap: 6px;
   }
-  /* Horizontal: popover above the type icon */
-  .ft-bar:not(.is-vertical) .ft-font-popover {
+  /* Horizontal: popover above the bar */
+  .ft-bar.is-floating:not(.is-vertical) .ft-font-popover,
+  .ft-bar.is-embedded .ft-font-popover {
     bottom: calc(100% + 12px);
+    top: auto;
     left: 50%;
     transform: translateX(-50%);
+  }
+  .ft-bar.is-embedded .ft-popover {
+    z-index: 50;
   }
   /* Vertical: popover to the side of the bar */
   .ft-bar.is-vertical .ft-font-popover {
@@ -1160,8 +1236,11 @@
 
   /* ─── Mobile ─── */
   @media (max-width: 768px) {
-    .ft-bar {
+    .ft-bar.is-floating {
       bottom: 24px;
+    }
+    .ft-bar.is-embedded,
+    .ft-bar.is-floating {
       height: 44px;
       padding: 0 8px;
       gap: 4px;

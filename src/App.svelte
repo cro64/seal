@@ -28,8 +28,45 @@
   let shareDropdownOpen = $state(false);
   let downloadDropdownOpen = $state(false);
   let shareFeedback = $state('');
-  let themeMakerOpen = $state(true);
+  let themeMakerOpen = $state(false);
+  let themeMakerEmbedded = $state(true);
+
+  $effect(() => {
+    if (!themeMakerOpen) themeMakerEmbedded = true;
+  });
+
+  function toggleThemeMaker() {
+    if (themeMakerOpen) {
+      themeMakerOpen = false;
+    } else {
+      themeMakerOpen = true;
+      themeMakerEmbedded = true;
+    }
+  }
+
+  function closeThemeMaker() {
+    themeMakerOpen = false;
+  }
   let savedThemes = $state(getSavedThemes());
+  const PREVIEW_WIDTH_KEY = 'styled-viewport-preset';
+  const VIEWPORT_PRESETS = { narrow: 600, default: 800, wide: 1100 };
+  const VIEWPORT_ORDER = ['narrow', 'default', 'wide'];
+  let viewportPreset = $state('default');
+  let isDesktop = $state(true);
+
+  function setViewportPreset(preset) {
+    if (!(preset in VIEWPORT_PRESETS)) return;
+    viewportPreset = preset;
+    try { localStorage.setItem(PREVIEW_WIDTH_KEY, preset); } catch {}
+  }
+
+  function cycleViewportPreset() {
+    const i = VIEWPORT_ORDER.indexOf(viewportPreset);
+    setViewportPreset(VIEWPORT_ORDER[(i + 1) % VIEWPORT_ORDER.length]);
+  }
+
+  const previewWidth = $derived(VIEWPORT_PRESETS[viewportPreset] ?? VIEWPORT_PRESETS.default);
+  const previewWidthStyle = $derived(isDesktop ? `max-width:${previewWidth}px` : '');
   let colorMode = $state(
     typeof document !== 'undefined'
       ? document.documentElement.getAttribute('data-theme') || 'dark'
@@ -116,11 +153,24 @@
     if (m === 'edit' || m === 'view') mode = m;
     savedThemes = getSavedThemes();
 
+    try {
+      const stored = localStorage.getItem(PREVIEW_WIDTH_KEY);
+      if (stored && stored in VIEWPORT_PRESETS) setViewportPreset(stored);
+    } catch {}
+
+    const desktopMq = window.matchMedia('(min-width: 769px)');
+    const syncDesktop = () => { isDesktop = desktopMq.matches; };
+    syncDesktop();
+    desktopMq.addEventListener('change', syncDesktop);
+
     const onBeforeUnload = (e) => {
       if (unsavedRef) e.preventDefault();
     };
     window.addEventListener('beforeunload', onBeforeUnload);
-    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      desktopMq.removeEventListener('change', syncDesktop);
+    };
   });
 
   function onStyleSelect(e) {
@@ -460,30 +510,47 @@
 <svelte:window onclick={closeDropdowns} />
 
 <div class="shell" style={accentStyle}>
-  <Toolbar
-    {mode}
-    {hasOverrides}
-    selectedStyleValue={selectedStyleValue}
-    bind:themeMakerOpen
-    {colorMode}
-    {savedThemes}
-    bind:copyDropdownOpen
-    copyFeedback={copyFeedback}
-    bind:shareDropdownOpen
-    shareFeedback={shareFeedback}
-    bind:downloadDropdownOpen
-    onStyleSelect={onStyleSelect}
-    toggleMode={toggleMode}
-    toggleColorMode={toggleColorMode}
-    onCopyHtml={handleCopyHtml}
-    onCopyMarkdown={handleCopyMarkdown}
-    onShareStyle={handleShareStyle}
-    onShareDoc={handleShareDoc}
-    onShareEncrypted={openShareEncrypted}
-    onDownloadMarkdown={handleDownloadMarkdown}
-    onDownloadHtml={handleDownloadHtml}
-    onDownloadPdf={handleDownloadPdf}
-  />
+  <header class="app-header">
+    <Toolbar
+      {mode}
+      {hasOverrides}
+      selectedStyleValue={selectedStyleValue}
+      themeMakerOpen={themeMakerOpen}
+      toggleThemeMaker={toggleThemeMaker}
+      {colorMode}
+      {savedThemes}
+      {isDesktop}
+      {viewportPreset}
+      {cycleViewportPreset}
+      bind:copyDropdownOpen
+      copyFeedback={copyFeedback}
+      bind:shareDropdownOpen
+      shareFeedback={shareFeedback}
+      bind:downloadDropdownOpen
+      onStyleSelect={onStyleSelect}
+      toggleMode={toggleMode}
+      toggleColorMode={toggleColorMode}
+      onCopyHtml={handleCopyHtml}
+      onCopyMarkdown={handleCopyMarkdown}
+      onShareStyle={handleShareStyle}
+      onShareDoc={handleShareDoc}
+      onShareEncrypted={openShareEncrypted}
+      onDownloadMarkdown={handleDownloadMarkdown}
+      onDownloadHtml={handleDownloadHtml}
+      onDownloadPdf={handleDownloadPdf}
+    />
+    {#if themeMakerOpen}
+      <ThemeMaker
+        config={themeConfig}
+        {savedThemes}
+        embedded={themeMakerEmbedded}
+        onPopOut={() => (themeMakerEmbedded = false)}
+        onClose={closeThemeMaker}
+        onSaveName={handleSavedThemeName}
+        onConfigChange={handleThemeConfigChange}
+      />
+    {/if}
+  </header>
 
   <!-- Main content -->
   <main class="main">
@@ -539,7 +606,7 @@
       </div>
     {:else}
       <div class="fullpreview">
-        <div class="card card-full">
+        <div class="card card-full" style={previewWidthStyle}>
           <div class="md-preview">
             {#if htmlContent}
               {@html htmlContent}
@@ -552,15 +619,6 @@
     {/if}
   </main>
 </div>
-
-  <ThemeMaker
-    config={themeConfig}
-    {savedThemes}
-    visible={themeMakerOpen}
-    onClose={() => (themeMakerOpen = false)}
-    onSaveName={handleSavedThemeName}
-    onConfigChange={handleThemeConfigChange}
-  />
 
 <ShareEncryptModal
   bind:open={shareEncryptOpen}
@@ -585,6 +643,12 @@
     font-size: 13px;
     -webkit-font-smoothing: antialiased;
     transition: background-color 0.2s, color 0.2s;
+  }
+
+  .app-header {
+    flex-shrink: 0;
+    z-index: 20;
+    overflow: visible;
   }
 
   /* ─── Main ─── */
@@ -703,8 +767,9 @@
     transition: background-color 0.2s;
   }
   .card-full {
-    width: 100%; max-width: 800px;
+    width: 100%;
     align-self: flex-start;
+    transition: max-width 0.25s ease;
   }
   .card-full .md-preview {
     padding: 56px 64px;

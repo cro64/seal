@@ -6,9 +6,13 @@
     mode,
     hasOverrides,
     selectedStyleValue,
-    themeMakerOpen = $bindable(true),
+    themeMakerOpen = false,
+    toggleThemeMaker,
     colorMode,
     savedThemes,
+    isDesktop = true,
+    viewportPreset = 'default',
+    cycleViewportPreset,
     copyDropdownOpen = $bindable(false),
     copyFeedback = '',
     shareDropdownOpen = $bindable(false),
@@ -32,6 +36,17 @@
     if (except !== 'share') shareDropdownOpen = false;
     if (except !== 'download') downloadDropdownOpen = false;
   }
+
+  const VIEWPORT_WIDTHS = { narrow: 600, default: 800, wide: 1100 };
+  const VIEWPORT_NEXT = { narrow: 'default', default: 'wide', wide: 'narrow' };
+  const VIEWPORT_LABELS = { narrow: 'Narrow', default: 'Default', wide: 'Wide' };
+
+  const viewportTitle = $derived.by(() => {
+    const w = VIEWPORT_WIDTHS[viewportPreset] ?? 800;
+    const next = VIEWPORT_NEXT[viewportPreset] ?? 'default';
+    const nextLabel = VIEWPORT_LABELS[next];
+    return `Preview width: ${VIEWPORT_LABELS[viewportPreset]} (${w}px). Click for ${nextLabel}`;
+  });
 </script>
 
 <header class="toolbar">
@@ -53,6 +68,30 @@
       </button>
     </div>
 
+    {#if mode === 'view' && isDesktop}
+      <div class="sep"></div>
+      <button
+        type="button"
+        class="icon-btn icon-btn-plain"
+        title={viewportTitle}
+        aria-label={viewportTitle}
+        onclick={cycleViewportPreset}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2"/>
+          <line x1="8" y1="21" x2="16" y2="21"/>
+          <line x1="12" y1="17" x2="12" y2="21"/>
+          {#if viewportPreset === 'narrow'}
+            <rect x="9" y="7" width="6" height="6" rx="0.5" fill="currentColor" stroke="none"/>
+          {:else if viewportPreset === 'default'}
+            <rect x="7" y="7" width="10" height="6" rx="0.5" fill="currentColor" stroke="none"/>
+          {:else}
+            <rect x="5" y="7" width="14" height="6" rx="0.5" fill="currentColor" stroke="none"/>
+          {/if}
+        </svg>
+      </button>
+    {/if}
+
     <div class="sep"></div>
 
     <div class="theme-picker">
@@ -70,16 +109,16 @@
       </select>
     </div>
 
-    <button class="icon-btn" class:is-active={themeMakerOpen} title={themeMakerOpen ? 'Hide style bar' : 'Show style bar'} onclick={() => (themeMakerOpen = !themeMakerOpen)}>
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
-    </button>
-
     <button class="icon-btn color-toggle" title={colorMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} onclick={toggleColorMode}>
       {#if colorMode === 'dark'}
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
       {:else}
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       {/if}
+    </button>
+
+    <button class="icon-btn" class:is-active={themeMakerOpen} title={themeMakerOpen ? 'Hide customize' : 'Customize style'} onclick={toggleThemeMaker}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
     </button>
   </div>
 
@@ -275,6 +314,14 @@
   }
   .icon-btn:hover { background: var(--c-bg-surface); color: var(--c-text-input); border-color: var(--c-border-hover); box-shadow: var(--c-shadow-xs); }
   .icon-btn.is-active { background: var(--c-accent); color: #fff; border-color: var(--c-accent); }
+  .icon-btn-plain {
+    border: none;
+    box-shadow: none;
+  }
+  .icon-btn-plain:hover {
+    border: none;
+    box-shadow: none;
+  }
 
   @media (max-width: 768px) {
     .toolbar { height: auto; flex-wrap: wrap; padding: 10px 28px 10px 12px; gap: 6px; }
