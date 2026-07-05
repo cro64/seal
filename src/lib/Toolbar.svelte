@@ -1,6 +1,7 @@
 <script>
   import { getPresetLabel, PRESET_IDS } from './themes';
   import ToolbarDropdown from './ToolbarDropdown.svelte';
+  import { MODES } from './mode.js';
 
   let {
     mode,
@@ -19,7 +20,7 @@
     shareFeedback = '',
     downloadDropdownOpen = $bindable(false),
     onStyleSelect,
-    toggleMode,
+    onModeChange,
     toggleColorMode,
     onCopyHtml,
     onCopyMarkdown,
@@ -30,6 +31,10 @@
     onDownloadHtml,
     onDownloadPdf,
   } = $props();
+
+  const segPosition = $derived(
+    mode === MODES.SOURCE ? 'at-center' : mode === MODES.VIEW ? 'at-right' : ''
+  );
 
   function closeOthers(except) {
     if (except !== 'copy') copyDropdownOpen = false;
@@ -59,16 +64,40 @@
     <div class="sep"></div>
 
     <div class="seg" role="tablist">
-      <div class="seg-indicator" class:at-right={mode === 'view'}></div>
-      <button class="seg-btn" role="tab" aria-selected={mode === 'edit'} class:is-active={mode === 'edit'} onclick={toggleMode} title="Edit">
+      <div class="seg-indicator {segPosition}"></div>
+      <button
+        class="seg-btn"
+        role="tab"
+        aria-selected={mode === MODES.INTERACTIVE}
+        class:is-active={mode === MODES.INTERACTIVE}
+        onclick={() => onModeChange(MODES.INTERACTIVE)}
+        title="Interactive"
+      >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
       </button>
-      <button class="seg-btn" role="tab" aria-selected={mode === 'view'} class:is-active={mode === 'view'} onclick={toggleMode} title="Preview">
+      <button
+        class="seg-btn"
+        role="tab"
+        aria-selected={mode === MODES.SOURCE}
+        class:is-active={mode === MODES.SOURCE}
+        onclick={() => onModeChange(MODES.SOURCE)}
+        title="Source"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      </button>
+      <button
+        class="seg-btn"
+        role="tab"
+        aria-selected={mode === MODES.VIEW}
+        class:is-active={mode === MODES.VIEW}
+        onclick={() => onModeChange(MODES.VIEW)}
+        title="View"
+      >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
       </button>
     </div>
 
-    {#if mode === 'view' && isDesktop}
+    {#if (mode === MODES.INTERACTIVE || mode === MODES.VIEW) && isDesktop}
       <div class="sep"></div>
       <button
         type="button"
@@ -243,18 +272,18 @@
   .seg {
     position: relative;
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     background: var(--c-bg-surface);
     border: 1px solid var(--c-border);
     border-radius: 9999px;
     padding: 3px;
-    min-width: 88px;
+    min-width: 132px;
     transition: background-color 0.2s, border-color 0.2s;
   }
   .seg-indicator {
     position: absolute;
     top: 3px; left: 3px;
-    width: calc(50% - 3px);
+    width: calc((100% - 6px) / 3);
     height: calc(100% - 6px);
     background: var(--c-bg-elevated);
     border-radius: 9999px;
@@ -262,8 +291,11 @@
     transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s, box-shadow 0.2s;
     z-index: 0;
   }
-  .seg-indicator.at-right {
+  .seg-indicator.at-center {
     transform: translateX(100%);
+  }
+  .seg-indicator.at-right {
+    transform: translateX(200%);
   }
   .seg-btn {
     position: relative; z-index: 1;

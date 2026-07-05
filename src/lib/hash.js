@@ -1,4 +1,5 @@
 import { gzipCompressToBase64url, gzipDecompressToStr, base64urlToBytes, isGzip } from './gzip.js';
+import { modeFromHash, modeToHash } from './mode.js';
 
 /** True if the value looks like base64url (gzip payload). */
 function looksLikeBase64url(str) {
@@ -32,9 +33,22 @@ async function decodeParam(str) {
   }
 }
 
+/** Decode raw (non-gzip) hash param. */
+function decodeRawParam(str) {
+  if (!str) return '';
+  try {
+    return decodeURIComponent(str);
+  } catch {
+    return str;
+  }
+}
+
+export { modeFromHash, modeToHash };
+
 /**
  * Parse hash string #s=...&d=...&m=... or #e=... (encrypted) into { s, d, m, e }.
  * s can be a preset id string or JSON string for { preset, overrides }.
+ * m is a raw single-char code (i/s/v), not gzip-compressed.
  * If e is present, content is encrypted; decrypt to get s, d, m.
  */
 export async function parseHash(hash) {
@@ -53,7 +67,9 @@ export async function parseHash(hash) {
         } catch {
           out.e = value;
         }
-      } else if (key === 's' || key === 'd' || key === 'm') {
+      } else if (key === 'm') {
+        out.m = decodeRawParam(value);
+      } else if (key === 's' || key === 'd') {
         pending.push({ key, value });
       }
     }
@@ -64,7 +80,6 @@ export async function parseHash(hash) {
     const { key } = pending[i];
     if (key === 's') out.s = decoded[i];
     else if (key === 'd') out.d = decoded[i];
-    else if (key === 'm') out.m = decoded[i];
   }
 
   return out;
@@ -89,6 +104,7 @@ export async function encodeStyle(style) {
 
 /**
  * Build hash string from style (preset id or config object), doc (markdown), mode.
+ * m is omitted when mode is interactive (default).
  * If encrypted is provided, returns #e=<blob> only (no s, d, m).
  */
 export async function buildHash({ style, doc, mode, encrypted }) {
@@ -102,7 +118,8 @@ export async function buildHash({ style, doc, mode, encrypted }) {
     parts.push('s=' + s);
   }
   if (doc) parts.push('d=' + (await encodeParam(doc)));
-  if (mode) parts.push('m=' + encodeURIComponent(mode));
+  const mHash = modeToHash(mode);
+  if (mHash) parts.push('m=' + encodeURIComponent(mHash));
   return parts.length ? '#' + parts.join('&') : '';
 }
 

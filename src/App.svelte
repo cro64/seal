@@ -3,7 +3,8 @@
   import { getPresetColors, PRESET_IDS, themeConfigToCss, getSavedThemes, loadPreset } from './lib/themes';
   import { parseMarkdown } from './lib/markdown.js';
   import { copyHtmlToClipboard, getStyledHtmlDocument, getThemeBackground } from './lib/copyHtml.js';
-  import { parseHash, buildHash, setHash, parseStyleParam } from './lib/hash.js';
+  import { parseHash, buildHash, setHash, parseStyleParam, modeFromHash, modeToHash } from './lib/hash.js';
+  import { MODE_TO_HASH } from './lib/mode.js';
   import { decryptPayload, encryptPayload } from './lib/encrypt.js';
   import { showFeedback } from './lib/feedback.js';
   import { getDownloadBasename, downloadBlob } from './lib/download.js';
@@ -11,8 +12,10 @@
   import ShareEncryptModal from './lib/ShareEncryptModal.svelte';
   import ThemeMaker from './lib/ThemeMaker.svelte';
   import Toolbar from './lib/Toolbar.svelte';
+  import DocumentLayout from './lib/DocumentLayout.svelte';
+  import SourcePane from './lib/SourcePane.svelte';
 
-  let mode = $state('edit');
+  let mode = $state('interactive');
   let markdown = $state('');
   let themeConfig = $state({ preset: 'github', overrides: {} });
   let themeCss = $state('');
@@ -106,9 +109,6 @@
     if (!initialBoilerplateText) return;
     initialBoilerplateText = null;
     markdown = '';
-    requestAnimationFrame(() => {
-      editorEl?.focus();
-    });
   }
 
   function restoreBoilerplateIfEmpty() {
@@ -150,7 +150,7 @@
         }
       } catch {}
     }
-    if (m === 'edit' || m === 'view') mode = m;
+    mode = modeFromHash(m);
     savedThemes = getSavedThemes();
 
     try {
@@ -187,8 +187,8 @@
     }
   }
 
-  async function toggleMode() {
-    mode = mode === 'edit' ? 'view' : 'edit';
+  async function setMode(nextMode) {
+    mode = nextMode;
     setHash(await buildHash({ style: styleForHash, doc: markdown, mode }));
   }
 
@@ -446,7 +446,7 @@
         themeConfig = { preset: payload.s, overrides: {} };
       }
       if (payload.d != null) markdown = payload.d;
-      if (payload.m === 'edit' || payload.m === 'view') mode = payload.m;
+      mode = modeFromHash(payload.m);
       encryptedBlob = '';
       decryptError = '';
       decryptPassword = '';
@@ -472,7 +472,7 @@
     shareEncryptLoading = true;
     shareEncryptError = '';
     try {
-      const payload = { s: themeConfig, d: markdown, m: mode };
+      const payload = { s: themeConfig, d: markdown, m: modeToHash(mode) || MODE_TO_HASH.interactive };
       const blob = await encryptPayload(payload, pwd);
       const hash = await buildHash({ encrypted: blob });
       const url = window.location.origin + window.location.pathname + hash;
@@ -490,17 +490,6 @@
   function handleThemeConfigChange(c) { themeConfig = c; }
   function handleSavedThemeName() { savedThemes = getSavedThemes(); }
 
-  let editorEl = $state(null);
-  function resizeEditor() {
-    if (!editorEl) return;
-    editorEl.style.height = 'auto';
-    editorEl.style.height = Math.max(editorEl.scrollHeight, 200) + 'px';
-  }
-  $effect(() => {
-    editorEl;
-    markdown;
-    queueMicrotask(resizeEditor);
-  });
 </script>
 
 <svelte:head>
@@ -528,7 +517,7 @@
       shareFeedback={shareFeedback}
       bind:downloadDropdownOpen
       onStyleSelect={onStyleSelect}
-      toggleMode={toggleMode}
+      onModeChange={setMode}
       toggleColorMode={toggleColorMode}
       onCopyHtml={handleCopyHtml}
       onCopyMarkdown={handleCopyMarkdown}
@@ -560,62 +549,20 @@
         error={decryptError}
         onDecrypt={handleDecrypt}
       />
-    {:else if mode === 'edit'}
-      <div class="split">
-        <div class="pane pane-editor">
-          <div class="pane-scroll">
-            <div class="editor-wrap">
-              {#if isBoilerplate}
-                <div class="editor-boilerplate" aria-hidden="true">{initialBoilerplateText}</div>
-                <textarea
-                  class="editor editor-overlay"
-                  placeholder=""
-                  bind:this={editorEl}
-                  onfocus={wipeBoilerplate}
-                  spellcheck="false"
-                  rows="1"
-                ></textarea>
-              {:else}
-                <textarea
-                  class="editor"
-                  placeholder="Paste your markdown here..."
-                  bind:value={markdown}
-                  bind:this={editorEl}
-                  oninput={resizeEditor}
-                  onblur={restoreBoilerplateIfEmpty}
-                  spellcheck="false"
-                ></textarea>
-              {/if}
-            </div>
-          </div>
-        </div>
-        <div class="divider"></div>
-        <div class="pane pane-preview">
-          <div class="pane-scroll">
-            <div class="card">
-              <div class="md-preview">
-                {#if htmlContent}
-                  {@html htmlContent}
-                {:else}
-                  <p class="empty">Start typing to see a live preview.</p>
-                {/if}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+    {:else if mode === 'source'}
+      <SourcePane
+        bind:markdown
+        {htmlContent}
+        {isBoilerplate}
+        {initialBoilerplateText}
+        onWipeBoilerplate={wipeBoilerplate}
+        onRestoreBoilerplateIfEmpty={restoreBoilerplateIfEmpty}
+      />
     {:else}
-      <div class="fullpreview">
-        <div class="card card-full" style={previewWidthStyle}>
-          <div class="md-preview">
-            {#if htmlContent}
-              {@html htmlContent}
-            {:else}
-              <p class="empty">Nothing to preview.</p>
-            {/if}
-          </div>
-        </div>
-      </div>
+      <DocumentLayout
+        {htmlContent}
+        previewWidthStyle={previewWidthStyle}
+      />
     {/if}
   </main>
 </div>
@@ -657,138 +604,4 @@
     min-height: 0; overflow: hidden;
   }
 
-  /* Split pane */
-  .split {
-    flex: 1; display: flex;
-    min-height: 0; overflow: hidden;
-  }
-  .pane {
-    flex: 1; display: flex;
-    flex-direction: column; min-width: 0;
-  }
-  .pane-editor {
-    background: var(--c-bg-editor);
-    transition: background-color 0.2s ease, color 0.2s ease;
-  }
-  .pane-preview {
-    background: var(--c-bg-preview);
-    transition: background-color 0.2s ease, color 0.2s ease;
-  }
-  .pane-preview .card {
-    min-height: 100%;
-    display: flex;
-    flex-direction: column;
-  }
-  .pane-preview .card .md-preview {
-    flex: 1;
-    min-height: 0;
-  }
-  .divider {
-    width: 1px; flex-shrink: 0;
-    background: var(--c-border-subtle);
-  }
-
-  /* Same scroll container for both panes */
-  .pane-scroll {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    padding: 28px;
-  }
-  .editor-wrap {
-    padding: 40px;
-    min-height: 100%;
-    background: var(--c-bg-editor);
-    border-radius: 12px;
-    box-shadow: var(--c-shadow-card);
-    transition: background-color 0.2s ease, box-shadow 0.2s ease;
-  }
-  .editor-wrap {
-    position: relative;
-  }
-  .editor-boilerplate {
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 13.5px;
-    line-height: 1.7;
-    color: var(--c-text-dimmed);
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    padding: 0;
-    margin: 0;
-    min-height: 200px;
-    pointer-events: none;
-  }
-  .editor-overlay {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    cursor: text;
-    min-height: 200px;
-    resize: none;
-    border: none;
-    outline: none;
-    background: transparent;
-  }
-  .editor {
-    display: block;
-    width: 100%;
-    min-height: 200px;
-    padding: 0;
-    border: none; outline: none; resize: none;
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 13.5px; line-height: 1.7;
-    color: var(--c-text-input);
-    background: transparent;
-    min-height: 0;
-    caret-color: var(--c-caret);
-    transition: color 0.2s ease, caret-color 0.2s ease;
-  }
-  .editor::placeholder { color: var(--c-placeholder); }
-  .editor::selection { background: var(--c-selection); }
-
-  /* Email card */
-  .card {
-    border-radius: 12px;
-    box-shadow: var(--c-shadow-card);
-    overflow: hidden;
-    transition: box-shadow 0.2s;
-  }
-  .card .md-preview {
-    padding: 40px;
-    border-radius: 12px;
-  }
-
-  /* Full preview */
-  .fullpreview {
-    flex: 1; overflow-y: auto;
-    padding: 40px;
-    display: flex; justify-content: center;
-    background: var(--c-bg-preview);
-    transition: background-color 0.2s;
-  }
-  .card-full {
-    width: 100%;
-    align-self: flex-start;
-    transition: max-width 0.25s ease;
-  }
-  .card-full .md-preview {
-    padding: 56px 64px;
-  }
-
-  .empty { color: var(--c-text-dimmed); font-style: italic; }
-
-  /* ─── Mobile ─── */
-  @media (max-width: 768px) {
-    .split { flex-direction: column; }
-    .pane-editor { border-right: none; }
-    .divider { width: auto; height: 1px; }
-    .pane-scroll { padding: 16px; }
-    .editor-wrap { padding: 24px; }
-    .editor { min-height: 120px; font-size: 13px; }
-    .editor-boilerplate, .editor-overlay { min-height: 120px; }
-    .editor-boilerplate { font-size: 13px; }
-    .fullpreview { padding: 20px; }
-    .card .md-preview { padding: 24px; }
-    .card-full .md-preview { padding: 32px 28px; }
-  }
 </style>
