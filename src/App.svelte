@@ -4,7 +4,7 @@
   import { parseMarkdown } from './lib/markdown.js';
   import { copyHtmlToClipboard, getStyledHtmlDocument, getThemeBackground } from './lib/copyHtml.js';
   import { parseHash, buildHash, setHash, parseStyleParam, modeFromHash, modeToHash } from './lib/hash.js';
-  import { MODE_TO_HASH } from './lib/mode.js';
+  import { MODE_TO_HASH, MODES } from './lib/mode.js';
   import { decryptPayload, encryptPayload } from './lib/encrypt.js';
   import { showFeedback } from './lib/feedback.js';
   import { getDownloadBasename, downloadBlob } from './lib/download.js';
@@ -14,6 +14,7 @@
   import Toolbar from './lib/Toolbar.svelte';
   import DocumentLayout from './lib/DocumentLayout.svelte';
   import SourcePane from './lib/SourcePane.svelte';
+  import InteractiveEditor from './lib/InteractiveEditor.svelte';
 
   let mode = $state('interactive');
   let markdown = $state('');
@@ -549,7 +550,7 @@
         error={decryptError}
         onDecrypt={handleDecrypt}
       />
-    {:else if mode === 'source'}
+    {:else if mode === MODES.SOURCE}
       <SourcePane
         bind:markdown
         {htmlContent}
@@ -558,10 +559,19 @@
         onWipeBoilerplate={wipeBoilerplate}
         onRestoreBoilerplateIfEmpty={restoreBoilerplateIfEmpty}
       />
+    {:else if mode === MODES.INTERACTIVE}
+      <InteractiveEditor
+        bind:markdown
+        {previewWidthStyle}
+        {isBoilerplate}
+        {initialBoilerplateText}
+        onWipeBoilerplate={wipeBoilerplate}
+        onRestoreBoilerplateIfEmpty={restoreBoilerplateIfEmpty}
+      />
     {:else}
       <DocumentLayout
         {htmlContent}
-        previewWidthStyle={previewWidthStyle}
+        {previewWidthStyle}
       />
     {/if}
   </main>

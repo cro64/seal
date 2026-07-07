@@ -14,5 +14,8 @@ const ALLOWED_ATTR = ['href', 'title', 'src', 'alt', 'class', 'id', 'target', 'r
 export function parseMarkdown(md) {
   if (!md || typeof md !== 'string') return '';
   const raw = marked.parse(md, { async: false, gfm: true, breaks: false });
+  if (typeof DOMPurify?.sanitize !== 'function') {
+    throw new Error('DOMPurify.sanitize is unavailable; refusing to return unsanitized HTML.');
+  }
   return DOMPurify.sanitize(raw, { ALLOWED_TAGS, ALLOWED_ATTR });
 }

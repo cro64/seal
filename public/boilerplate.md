@@ -146,7 +146,7 @@ ___
 
 Images render inline (if your markdown includes any):
 
-![Placeholder](https://via.placeholder.com/600x200/e2e8f0/475569?text=Sample+Image)
+![Sample landscape](https://picsum.photos/600/200)
 
 ---
 
